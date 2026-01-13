@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Push-up Counter Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      text-align: center; 
+      margin: 0;
+      padding: 20px;
+      background: white;
+      color: black;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      text-align: left;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 36px;
+      margin-bottom: 5px;
+    }
+    .header p {
+      font-size: 18px;
+      opacity: 0.9;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .stat-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 25px;
+      border: 3px solid black;
+    }
+    .stat-card:nth-child(1), .stat-card:nth-child(2){
+      color: #ff4757;
+    }
+    .stat-card:nth-child(3), .stat-card:nth-child(4){
+      color: #2F9E44;
+    }
+    .stat-card h3 {
+      margin-top: 0;
+      font-size: 16px;
+      opacity: 0.8;
+    }
+    .stat-value {
+      font-size: 48px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    .controls {
+      margin: 30px 0;
+    }
+    button {
+      padding: 12px 25px;
+      margin: 10px;
+      font-size: 18px;
+      border: 2px solid black;
+      border-radius: 10px;
+      background: white;
+      color: #A5D9FE;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    button:active {
+      transform: translateY(-1px);
+    }
+    #stopBtn {
+      background: #ff4757;
+      color: white;
+    }
+    #startBtn {
+      background: #A5D9FE;
+      color: white;
+    }
+    .history-section {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      margin-top: 30px;
+    }
+    #historyList {
+      text-align: left;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .feedback {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 15px;
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .connected { color: #2F9E44; }
+    .disconnected { color: #ff4757; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1>Hi Areeb, Good to see you again!</h1>
+        <p>Let's pushup together</p>
+      </div>
+      <div>
+        <button id="connectBleButton" style="color:#2F9E44">Connect BLE</button>
+        <button id="disconnectBleButton" style="color:#ff4757; display:none;">Disconnect</button>
+        <span id="bleStatus" class="disconnected">● Disconnected</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="calibrateBtn" disabled>Calibrate Device</button>
+      <button id="startBtn" disabled>Start Session</button>
+      <button id="stopBtn" disabled style="display:none;">Stop Session</button>
+      <div style="margin-top: 10px;">
+        <input type="number" id="weightInput" placeholder="Enter weight (kg)" style="padding: 10px; font-size: 16px;">
+        <button id="setWeightBtn" disabled>Set Weight</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Pushup Count</h3>
+        <div class="stat-value" id="pushupCount">0</div>
+        <p>Current Session</p>
+      </div>
+      <div class="stat-card">
+        <h3>Calories Burned</h3>
+        <div class="stat-value" id="caloriesCount">0</div>
+        <p>kcal</p>
+      </div>
+      <div class="stat-card">
+        <h3>Session Duration</h3>
+        <div class="stat-value" id="durationCount">0</div>
+        <p>seconds</p>
+      </div>
+      <div class="stat-card">
+        <h3>Device Status</h3>
+        <div class="stat-value" id="deviceStatus">IDLE</div>
+        <p id="sessionStatus">Not started</p>
+      </div>
+    </div>
+
+    <div class="feedback" id="feedback" style="display:none;"></div>
+
+    <div class="history-section">
+      <h1 style="text-align: left;">Pushup Analytics</h1>
+      <canvas id="pushupChart" height="100"></canvas>
+      <div id="historyList" style="margin-top: 20px;">No session data yet</div>
+    </div>
+  </div>
+
+  <script>
+    // BLE UUIDs (MUST match Arduino code)
+    const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+    const UUIDs = {
+      PUSHUP_COUNT: "19b10001-e8f2-537e-4f6c-d104768a1214",
+      DURATION: "19b10002-e8f2-537e-4f6c-d104768a1214",
+      CALORIES: "19b10003-e8f2-537e-4f6c-d104768a1214",
+      WEIGHT: "19b10004-e8f2-537e-4f6c-d104768a1214",
+      CALIBRATE: "19b10005-e8f2-537e-4f6c-d104768a1214",
+      START: "19b10006-e8f2-537e-4f6c-d104768a1214",
+      STOP: "19b10007-e8f2-537e-4f6c-d104768a1214"
+    };
+
+    // Global variables
+    let bleDevice = null;
+    let bleServer = null;
+    let service = null;
+    let characteristics = {};
+    let sessionActive = false;
+    let pushupData = {
+      labels: [],
+      counts: []
+    };
+
+    // DOM Elements
+    const connectBtn = document.getElementById('connectBleButton');
+    const disconnectBtn = document.getElementById('disconnectBleButton');
+    const calibrateBtn = document.getElementById('calibrateBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const setWeightBtn = document.getElementById('setWeightBtn');
+    const weightInput = document.getElementById('weightInput');
+    const bleStatus = document.getElementById('bleStatus');
+    const feedbackDiv = document.getElementById('feedback');
+
+    // Chart setup
+    const ctx = document.getElementById('pushupChart').getContext('2d');
+    const pushupChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: pushupData.labels,
+        datasets: [{
+          label: 'Pushup Count',
+          data: pushupData.counts,
+          backgroundColor: '#A5D9FE',
+          borderRadius: 10,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: false
+          },
+          title: {
+            display: true,
+            text: 'Pushup Performance',
+            font: {
+              size: 16
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 5
+            }
+          }
+        }
+      }
+    });
+
+    // Check Web Bluetooth support
+    function isWebBluetoothEnabled() {
+      if (!navigator.bluetooth) {
+        showFeedback("Web Bluetooth not supported in this browser", "error");
+        return false;
+      }
+      return true;
+    }
+
+    // Connect to BLE Device
+    connectBtn.addEventListener('click', async () => {
+      if (!isWebBluetoothEnabled()) return;
+      
+      try {
+        showFeedback("Searching for Pushup Device...", "info");
+        
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "Pushup Device" }],
+          optionalServices: [SERVICE_UUID]
+        });
+        
+        bleStatus.textContent = "● Connecting...";
+        bleStatus.className = "connected";
+        
+        bleDevice.addEventListener('gattservicedisconnected', onDisconnected);
+        
+        bleServer = await bleDevice.gatt.connect();
+        service = await bleServer.getPrimaryService(SERVICE_UUID);
+        
+        // Get all characteristics
+        characteristics.PUSHUP_COUNT = await service.getCharacteristic(UUIDs.PUSHUP_COUNT);
+        characteristics.DURATION = await service.getCharacteristic(UUIDs.DURATION);
+        characteristics.CALORIES = await service.getCharacteristic(UUIDs.CALORIES);
+        characteristics.WEIGHT = await service.getCharacteristic(UUIDs.WEIGHT);
+        characteristics.CALIBRATE = await service.getCharacteristic(UUIDs.CALIBRATE);
+        characteristics.START = await service.getCharacteristic(UUIDs.START);
+        characteristics.STOP = await service.getCharacteristic(UUIDs.STOP);
+        
+        // Enable notifications
+        await enableNotifications();
+        
+        // Update UI
+        bleStatus.textContent = "● Connected";
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'inline-block';
+        calibrateBtn.disabled = false;
+        startBtn.disabled = false;
+        setWeightBtn.disabled = false;
+        
+        showFeedback("Connected to Pushup Device!", "success");
+        
+        // Read initial values
+        await readInitialValues();
+        
+      } catch (error) {
+        console.error("Connection failed:", error);
+        showFeedback("Connection failed: " + error.message, "error");
+        bleStatus.textContent = "● Disconnected";
+        bleStatus.className = "disconnected";
+      }
+    });
+
+    // Disconnect from BLE
+    disconnectBtn.addEventListener('click', async () => {
+      if (bleDevice && bleDevice.gatt.connected) {
+        await bleDevice.gatt.disconnect();
+        onDisconnected();
+      }
+    });
+
+    // Enable notifications for characteristics
+    async function enableNotifications() {
+      characteristics.PUSHUP_COUNT.addEventListener('characteristicvaluechanged', 
+        handlePushupCountChange);
+      characteristics.DURATION.addEventListener('characteristicvaluechanged', 
+        handleDurationChange);
+      characteristics.CALORIES.addEventListener('characteristicvaluechanged', 
+        handleCaloriesChange);
+      
+      await characteristics.PUSHUP_COUNT.startNotifications();
+      await characteristics.DURATION.startNotifications();
+      await characteristics.CALORIES.startNotifications();
+      
+      console.log("Notifications enabled");
+    }
+
+    // Event handlers for notifications
+    function handlePushupCountChange(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      document.getElementById('pushupCount').textContent = value;
+      updateSessionStatus(value > 0);
+    }
+
+    function handleDurationChange(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      document.getElementById('durationCount').textContent = value;
+    }
+
+    function handleCaloriesChange(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      document.getElementById('caloriesCount').textContent = parseFloat(value).toFixed(2);
+    }
+
+    // Read initial values
+    async function readInitialValues() {
+      try {
+        const pushupValue = await characteristics.PUSHUP_COUNT.readValue();
+        const pushupCount = new TextDecoder().decode(pushupValue);
+        document.getElementById('pushupCount').textContent = pushupCount;
+        
+        const durationValue = await characteristics.DURATION.readValue();
+        const duration = new TextDecoder().decode(durationValue);
+        document.getElementById('durationCount').textContent = duration;
+        
+        const caloriesValue = await characteristics.CALORIES.readValue();
+        const calories = new TextDecoder().decode(caloriesValue);
+        document.getElementById('caloriesCount').textContent = parseFloat(calories).toFixed(2);
+        
+      } catch (error) {
+        console.error("Error reading values:", error);
+      }
+    }
+
+    // Send command to BLE device
+    async function sendCommand(characteristic, value) {
+      if (!bleDevice || !bleDevice.gatt.connected) {
+        showFeedback("Not connected to device", "error");
+        return;
+      }
+      
+      try {
+        const data = new Uint8Array([value]);
+        await characteristic.writeValue(data);
+        console.log(`Command sent: ${value} to ${characteristic.uuid}`);
+      } catch (error) {
+        console.error("Error sending command:", error);
+        showFeedback("Command failed: " + error.message, "error");
+      }
+    }
+
+    // Button event handlers
+    calibrateBtn.addEventListener('click', () => {
+      sendCommand(characteristics.CALIBRATE, 0x01);
+      showFeedback("Calibrating device... Move slowly up and down", "info");
+    });
+
+    startBtn.addEventListener('click', () => {
+      sendCommand(characteristics.START, 0x01);
+      sessionActive = true;
+      startBtn.style.display = 'none';
+      stopBtn.style.display = 'inline-block';
+      document.getElementById('deviceStatus').textContent = "ACTIVE";
+      document.getElementById('sessionStatus').textContent = "Session running";
+      showFeedback("Session started!", "success");
+    });
+
+    stopBtn.addEventListener('click', () => {
+      sendCommand(characteristics.STOP, 0x01);
+      sessionActive = false;
+      stopBtn.style.display = 'none';
+      startBtn.style.display = 'inline-block';
+      document.getElementById('deviceStatus').textContent = "IDLE";
+      document.getElementById('sessionStatus').textContent = "Session ended";
+      
+      // Add to history
+      addToHistory();
+      showFeedback("Session stopped! Data saved.", "info");
+    });
+
+    setWeightBtn.addEventListener('click', async () => {
+      const weight = parseFloat(weightInput.value);
+      if (weight && weight > 0) {
+        try {
+          const weightStr = weight.toString();
+          const encoder = new TextEncoder();
+          const data = encoder.encode(weightStr);
+          await characteristics.WEIGHT.writeValue(data);
+          showFeedback(`Weight set to ${weight} kg`, "success");
+          weightInput.value = '';
+        } catch (error) {
+          showFeedback("Failed to set weight", "error");
+        }
+      } else {
+        showFeedback("Please enter a valid weight", "error");
+      }
+    });
+
+    // Update session status
+    function updateSessionStatus(isActive) {
+      if (isActive && !sessionActive) {
+        sessionActive = true;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        document.getElementById('deviceStatus').textContent = "ACTIVE";
+        document.getElementById('sessionStatus').textContent = "Session running";
+      }
+    }
+
+    // Add session to history
+    function addToHistory() {
+      const pushupCount = document.getElementById('pushupCount').textContent;
+      const calories = document.getElementById('caloriesCount').textContent;
+      const duration = document.getElementById('durationCount').textContent;
+      const timestamp = new Date().toLocaleTimeString();
+      
+      if (parseInt(pushupCount) > 0) {
+        // Add to chart data
+        pushupData.labels.push(timestamp);
+        pushupData.counts.push(parseInt(pushupCount));
+        
+        // Update chart
+        pushupChart.data.labels = pushupData.labels;
+        pushupChart.data.datasets[0].data = pushupData.counts;
+        pushupChart.update();
+        
+        // Add to history list
+        const historyDiv = document.getElementById('historyList');
+        const entry = document.createElement('div');
+        entry.style.margin = '5px 0';
+        entry.style.padding = '10px';
+        entry.style.backgroundColor = '#f0f8ff';
+        entry.style.borderRadius = '5px';
+        entry.innerHTML = `<strong>${timestamp}</strong> - ${pushupCount} pushups, ${calories} kcal, ${duration}s`;
+        historyDiv.prepend(entry);
+      }
+    }
+
+    // Disconnected handler
+    function onDisconnected() {
+      bleStatus.textContent = "● Disconnected";
+      bleStatus.className = "disconnected";
+      connectBtn.style.display = 'inline-block';
+      disconnectBtn.style.display = 'none';
+      
+      // Disable all buttons
+      calibrateBtn.disabled = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      setWeightBtn.disabled = true;
+      
+      // Reset UI
+      startBtn.style.display = 'inline-block';
+      stopBtn.style.display = 'none';
+      document.getElementById('deviceStatus').textContent = "DISCONNECTED";
+      document.getElementById('sessionStatus').textContent = "Device not connected";
+      
+      showFeedback("Device disconnected", "error");
+      
+      // Reset BLE variables
+      bleDevice = null;
+      bleServer = null;
+      service = null;
+      characteristics = {};
+      sessionActive = false;
+    }
+
+    // Show feedback message
+    function showFeedback(message, type) {
+      feedbackDiv.textContent = message;
+      feedbackDiv.style.display = 'block';
+      
+      if (type === 'error') {
+        feedbackDiv.style.color = '#ff4757';
+        feedbackDiv.style.backgroundColor = '#ffeaea';
+      } else if (type === 'success') {
+        feedbackDiv.style.color = '#2F9E44';
+        feedbackDiv.style.backgroundColor = '#eaffea';
+      } else {
+        feedbackDiv.style.color = '#A5D9FE';
+        feedbackDiv.style.backgroundColor = '#eaf5ff';
+      }
+      
+      // Auto-hide after 3 seconds
+      setTimeout(() => {
+        feedbackDiv.style.display = 'none';
+      }, 3000);
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!isWebBluetoothEnabled()) {
+        connectBtn.disabled = true;
+        connectBtn.textContent = "BLE Not Supported";
+      }
+    });
+  </script>
+</body>
+</html>
