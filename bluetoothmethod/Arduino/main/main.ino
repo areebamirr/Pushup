@@ -372,85 +372,10 @@ bool oldDeviceConnected = false;
 #define START_CHARACTERISTICS_UUID        "19b10006-e8f2-537e-4f6c-d104768a1214"
 #define STOP_CHARACTERISTICS_UUID         "19b10007-e8f2-537e-4f6c-d104768a1214"
 
-// Server Callbacks
-class MyServerCallbacks: public BLEServerCallbacks { 
-    void onConnect(BLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("Device Connected!");
-    };
-    
-    void onDisconnect(BLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("Device Disconnected!");
-        // Stop session if active
-        if (sessionActive) {
-            sessionActive = false;
-            Serial.println("Session stopped due to disconnect");
-        }
-    };
-};
-
-// Calibrate Callback
-class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Calibrate Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                calibrateSensor();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Calibration complete via BLE");
-            }
-        }
-    }
-};
-
-// Start Callback
-class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Start Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                startSession();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Session started via BLE");
-            }
-        }
-    }
-};
-
-// Stop Callback
-class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Stop Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                stopSession();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Session stopped via BLE");
-            }
-        }
-    }
-};
-
 // Weight Callback
 class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        String rxValue = pCharacteristic->getValue();
         
         if (rxValue.length() > 0) {
             Serial.print("Weight Characteristic event, written: ");
@@ -589,19 +514,89 @@ void detectPushup() {
     delay(50);
 }
 
+
+// Server Callbacks
+class MyServerCallbacks: public BLEServerCallbacks { 
+    void onConnect(BLEServer* pServer) {
+        deviceConnected = true;
+        Serial.println("Device Connected!");
+    };
+    
+    void onDisconnect(BLEServer* pServer) {
+        deviceConnected = false;
+        Serial.println("Device Disconnected!");
+        // Stop session if active
+        if (sessionActive) {
+            sessionActive = false;
+            Serial.println("Session stopped due to disconnect");
+        }
+    };
+};
+
+// Calibrate Callback
+class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Calibrate Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {  // Using byte comparison
+                calibrateSensor();
+                // Clear the value after processing
+                pCharacteristic->setValue("0");
+                Serial.println("Calibration complete via BLE");
+            }
+        }
+    }
+};
+
+// Start Callback
+class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Start Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {  // Using byte comparison
+                startSession();
+                // Clear the value after processing
+                pCharacteristic->setValue("0");
+                Serial.println("Session started via BLE");
+            }
+        }
+    }
+};
+
+// Stop Callback
+class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Stop Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {  // Using byte comparison
+                stopSession();
+                // Clear the value after processing
+                pCharacteristic->setValue("0");
+                Serial.println("Session stopped via BLE");
+            }
+        }
+    }
+};
+
 void setup() {
     Serial.begin(115200);
     Wire.begin(21, 22);
 
     // Initialize MPU
-    if (!mpu.begin()) {
-        Serial.println("Failed to find MPU6050 chip");
-        while (1) {
-            delay(10);
-        }
-    }
+    mpu.initialize();
     Serial.println("MPU6050 Found!");
-    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
     
     // Create the BLE Server
     BLEDevice::init("Pushup Device");
