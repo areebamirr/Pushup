@@ -321,7 +321,6 @@
 //         Serial.println("Device Connected");
 //     }
 // }
-
 // Dependencies
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -348,9 +347,9 @@ float minZ = 10, maxZ = -10;
 float downThreshold, upThreshold;
 bool goingDown = false;
 
-// BLE Characteristics - FIXED: Use pointers
+// BLE Characteristics
 BLEServer* pServer = NULL;
-BLEService* pService = NULL;  // ADD THIS: Service pointer
+BLEService* pService = NULL;
 BLECharacteristic* pPushupCountCharacteristic = NULL;
 BLECharacteristic* pDurationCharacteristic = NULL;
 BLECharacteristic* pCaloriesCharacteristic = NULL;
@@ -364,13 +363,13 @@ bool oldDeviceConnected = false;
 
 // UUID Settings
 #define SERVICE_UUID                      "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define PUSHUP_COUNT_CHARACTERISTIC_UUID  "19b10001-e8f2-537e-4f6c-d104768a1214"  // Changed to CHARACTERISTIC (singular)
-#define DURATION_CHARACTERISTIC_UUID      "19b10002-e8f2-537e-4f6c-d104768a1214"  // Changed
-#define CALORIES_CHARACTERISTIC_UUID      "19b10003-e8f2-537e-4f6c-d104768a1214"  // Changed
-#define WEIGHT_CHARACTERISTIC_UUID        "19b10004-e8f2-537e-4f6c-d104768a1214"  // Changed
-#define CALIBRATE_CHARACTERISTIC_UUID     "19b10005-e8f2-537e-4f6c-d104768a1214"  // Changed
-#define START_CHARACTERISTIC_UUID         "19b10006-e8f2-537e-4f6c-d104768a1214"  // Changed
-#define STOP_CHARACTERISTIC_UUID          "19b10007-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define PUSHUP_COUNT_CHARACTERISTIC_UUID  "19b10001-e8f2-537e-4f6c-d104768a1214"
+#define DURATION_CHARACTERISTIC_UUID      "19b10002-e8f2-537e-4f6c-d104768a1214"
+#define CALORIES_CHARACTERISTIC_UUID      "19b10003-e8f2-537e-4f6c-d104768a1214"
+#define WEIGHT_CHARACTERISTIC_UUID        "19b10004-e8f2-537e-4f6c-d104768a1214"
+#define CALIBRATE_CHARACTERISTIC_UUID     "19b10005-e8f2-537e-4f6c-d104768a1214"
+#define START_CHARACTERISTIC_UUID         "19b10006-e8f2-537e-4f6c-d104768a1214"
+#define STOP_CHARACTERISTIC_UUID          "19b10007-e8f2-537e-4f6c-d104768a1214"
 
 // Server Callbacks
 class MyServerCallbacks: public BLEServerCallbacks { 
@@ -389,81 +388,79 @@ class MyServerCallbacks: public BLEServerCallbacks {
     };
 };
 
-// Weight Callback - FIXED: Use std::string
+// Weight Callback - FIXED: Use Arduino String
 class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        // Get value as Arduino String
+        String rxValue = pCharacteristic->getValue().c_str();
         
         if (rxValue.length() > 0) {
             Serial.print("Weight Characteristic event, written: ");
+            Serial.println(rxValue);
             
-            // Convert to String
-            String weightStr = "";
-            for (size_t i = 0; i < rxValue.length(); i++) {
-                weightStr += rxValue[i];
-            }
-            
-            userWeight = weightStr.toFloat();
+            userWeight = rxValue.toFloat();
             Serial.print("New weight set: ");
             Serial.print(userWeight);
             Serial.println(" kg");
             
             // Update characteristic value
-            pCharacteristic->setValue(weightStr.c_str());
+            pCharacteristic->setValue(rxValue.c_str());
         }
     }
 };
 
-// Calibrate Callback - FIXED
+// Calibrate Callback - FIXED: Use Arduino String
 class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        String rxValue = pCharacteristic->getValue().c_str();
         
         if (rxValue.length() > 0) {
             Serial.print("Calibrate Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {
+            
+            // Check first character (should be "1" for calibrate)
+            if (rxValue[0] == '1') {
                 calibrateSensor();
-                // Don't clear value, just leave it
+                Serial.println("Calibration triggered via BLE");
             }
         }
     }
 };
 
-// Start Callback - FIXED
+// Start Callback - FIXED: Use Arduino String
 class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        String rxValue = pCharacteristic->getValue().c_str();
         
         if (rxValue.length() > 0) {
             Serial.print("Start Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {
+            Serial.println(rxValue);
+            
+            if (rxValue[0] == '1') {
                 startSession();
+                Serial.println("Session started via BLE");
             }
         }
     }
 };
 
-// Stop Callback - FIXED
+// Stop Callback - FIXED: Use Arduino String
 class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        String rxValue = pCharacteristic->getValue().c_str();
         
         if (rxValue.length() > 0) {
             Serial.print("Stop Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {
+            Serial.println(rxValue);
+            
+            if (rxValue[0] == '1') {
                 stopSession();
+                Serial.println("Session stopped via BLE");
             }
         }
     }
 };
 
-// Sensor Functions (keep as is)
+// Sensor Functions
 void calibrateSensor() {
     Serial.println("\nCalibrating... move slowly up and down once or twice");
     minZ = 10; maxZ = -10;
@@ -628,7 +625,7 @@ void setup() {
     pDurationCharacteristic->addDescriptor(new BLE2902());
     pDurationCharacteristic->setValue("0.0");
 
-    // Calories Characteristic - THIS WAS MISSING!
+    // Calories Characteristic
     pCaloriesCharacteristic = pService->createCharacteristic(
         CALORIES_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
