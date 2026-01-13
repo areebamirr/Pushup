@@ -322,7 +322,6 @@
 //     }
 // }
 
-
 // Dependencies
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -334,7 +333,7 @@
 MPU6050 mpu;
 
 bool sessionActive = false;
-bool calibrated = false;  // Missing declaration
+bool calibrated = false;
 
 // Time Duration for each Pushing session
 unsigned long startTime = 0;
@@ -349,41 +348,59 @@ float minZ = 10, maxZ = -10;
 float downThreshold, upThreshold;
 bool goingDown = false;
 
-// BLE Characteristics
+// BLE Characteristics - FIXED: Use pointers
 BLEServer* pServer = NULL;
-BLECharacteristic* pPushupCountCharacteristics = NULL;  // Fixed naming
-BLECharacteristic* pDurationCharacteristics = NULL;      // Fixed naming
-BLECharacteristic* pCaloriesCharacteristics = NULL;      // Fixed naming
-BLECharacteristic* pWeightCharacteristics = NULL;        // Fixed naming
-BLECharacteristic* pCalibrateCharacteristics = NULL;     // Fixed naming
-BLECharacteristic* pStartCharacteristics = NULL;         // Fixed naming
-BLECharacteristic* pStopCharacteristics = NULL;          // Fixed naming
+BLEService* pService = NULL;  // ADD THIS: Service pointer
+BLECharacteristic* pPushupCountCharacteristic = NULL;
+BLECharacteristic* pDurationCharacteristic = NULL;
+BLECharacteristic* pCaloriesCharacteristic = NULL;
+BLECharacteristic* pWeightCharacteristic = NULL;
+BLECharacteristic* pCalibrateCharacteristic = NULL;
+BLECharacteristic* pStartCharacteristic = NULL;
+BLECharacteristic* pStopCharacteristic = NULL;
 
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
 // UUID Settings
 #define SERVICE_UUID                      "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define PUSHUP_COUNT_CHARACTERISTICS_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
-#define DURATION_CHARACTERISTICS_UUID     "19b10002-e8f2-537e-4f6c-d104768a1214"
-#define CALORIES_CHARACTERISTICS_UUID     "19b10003-e8f2-537e-4f6c-d104768a1214"
-#define WEIGHT_CHARACTERISTICS_UUID       "19b10004-e8f2-537e-4f6c-d104768a1214"
-#define CALIBRATE_CHARACTERISTICS_UUID    "19b10005-e8f2-537e-4f6c-d104768a1214"
-#define START_CHARACTERISTICS_UUID        "19b10006-e8f2-537e-4f6c-d104768a1214"
-#define STOP_CHARACTERISTICS_UUID         "19b10007-e8f2-537e-4f6c-d104768a1214"
+#define PUSHUP_COUNT_CHARACTERISTIC_UUID  "19b10001-e8f2-537e-4f6c-d104768a1214"  // Changed to CHARACTERISTIC (singular)
+#define DURATION_CHARACTERISTIC_UUID      "19b10002-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define CALORIES_CHARACTERISTIC_UUID      "19b10003-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define WEIGHT_CHARACTERISTIC_UUID        "19b10004-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define CALIBRATE_CHARACTERISTIC_UUID     "19b10005-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define START_CHARACTERISTIC_UUID         "19b10006-e8f2-537e-4f6c-d104768a1214"  // Changed
+#define STOP_CHARACTERISTIC_UUID          "19b10007-e8f2-537e-4f6c-d104768a1214"  // Changed
 
-// Weight Callback
+// Server Callbacks
+class MyServerCallbacks: public BLEServerCallbacks { 
+    void onConnect(BLEServer* pServer) {
+        deviceConnected = true;
+        Serial.println("Device Connected!");
+    };
+    
+    void onDisconnect(BLEServer* pServer) {
+        deviceConnected = false;
+        Serial.println("Device Disconnected!");
+        if (sessionActive) {
+            sessionActive = false;
+            Serial.println("Session stopped due to disconnect");
+        }
+    };
+};
+
+// Weight Callback - FIXED: Use std::string
 class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue();
+        std::string rxValue = pCharacteristic->getValue();
         
         if (rxValue.length() > 0) {
             Serial.print("Weight Characteristic event, written: ");
             
-            // Convert string to float for weight
+            // Convert to String
             String weightStr = "";
-            for (int i = 0; i < rxValue.length(); i++) {
-                weightStr += (char)rxValue[i];
+            for (size_t i = 0; i < rxValue.length(); i++) {
+                weightStr += rxValue[i];
             }
             
             userWeight = weightStr.toFloat();
@@ -393,12 +410,60 @@ class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
             
             // Update characteristic value
             pCharacteristic->setValue(weightStr.c_str());
-            pCharacteristic->notify();
         }
     }
 };
 
-// Sensor Functions
+// Calibrate Callback - FIXED
+class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        std::string rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Calibrate Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {
+                calibrateSensor();
+                // Don't clear value, just leave it
+            }
+        }
+    }
+};
+
+// Start Callback - FIXED
+class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        std::string rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Start Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {
+                startSession();
+            }
+        }
+    }
+};
+
+// Stop Callback - FIXED
+class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        std::string rxValue = pCharacteristic->getValue();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Stop Characteristic event, written: ");
+            Serial.println((int)rxValue[0]);
+
+            if (rxValue[0] == 0x01) {
+                stopSession();
+            }
+        }
+    }
+};
+
+// Sensor Functions (keep as is)
 void calibrateSensor() {
     Serial.println("\nCalibrating... move slowly up and down once or twice");
     minZ = 10; maxZ = -10;
@@ -436,23 +501,36 @@ void startSession() {
     lastPushTime = startTime;
     durations = 0;
     
+    // Reset BLE values
+    if (pPushupCountCharacteristic) {
+        pPushupCountCharacteristic->setValue("0");
+        pPushupCountCharacteristic->notify();
+    }
+    if (pDurationCharacteristic) {
+        pDurationCharacteristic->setValue("0.0");
+        pDurationCharacteristic->notify();
+    }
+    if (pCaloriesCharacteristic) {
+        pCaloriesCharacteristic->setValue("0.00");
+        pCaloriesCharacteristic->notify();
+    }
+    
     Serial.println("Session started!");
 }
 
 void stopSession() {    
     sessionActive = false;
     
-    // Update all characteristics before stopping
-    if (pDurationCharacteristics) {
+    if (pDurationCharacteristic) {
         String durationStr = String(durations, 1);
-        pDurationCharacteristics->setValue(durationStr.c_str());
-        pDurationCharacteristics->notify();
+        pDurationCharacteristic->setValue(durationStr.c_str());
+        pDurationCharacteristic->notify();
     }
     
-    if (pCaloriesCharacteristics) {
+    if (pCaloriesCharacteristic) {
         String caloriesStr = String(totalCalories, 2);
-        pCaloriesCharacteristics->setValue(caloriesStr.c_str());
-        pCaloriesCharacteristics->notify();
+        pCaloriesCharacteristic->setValue(caloriesStr.c_str());
+        pCaloriesCharacteristic->notify();
     }
     
     Serial.println("Session stopped!");
@@ -489,23 +567,22 @@ void detectPushup() {
         float calories = calcCalories(userWeight, pushTime);
         totalCalories += calories;
 
-        // Update BLE characteristics
-        if (pPushupCountCharacteristics) {
+        if (pPushupCountCharacteristic) {
             String countStr = String(pushupCount);
-            pPushupCountCharacteristics->setValue(countStr.c_str());
-            pPushupCountCharacteristics->notify();
+            pPushupCountCharacteristic->setValue(countStr.c_str());
+            pPushupCountCharacteristic->notify();
         }
         
-        if (pDurationCharacteristics) {
+        if (pDurationCharacteristic) {
             String durationStr = String(durations, 1);
-            pDurationCharacteristics->setValue(durationStr.c_str());
-            pDurationCharacteristics->notify();
+            pDurationCharacteristic->setValue(durationStr.c_str());
+            pDurationCharacteristic->notify();
         }
         
-        if (pCaloriesCharacteristics) {
+        if (pCaloriesCharacteristic) {
             String caloriesStr = String(totalCalories, 2);
-            pCaloriesCharacteristics->setValue(caloriesStr.c_str());
-            pCaloriesCharacteristics->notify();
+            pCaloriesCharacteristic->setValue(caloriesStr.c_str());
+            pCaloriesCharacteristic->notify();
         }
 
         Serial.printf("Pushup #%d | Time: %.2fs | Calories: %.2fkCal\n", 
@@ -513,82 +590,6 @@ void detectPushup() {
     }
     delay(50);
 }
-
-
-// Server Callbacks
-class MyServerCallbacks: public BLEServerCallbacks { 
-    void onConnect(BLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("Device Connected!");
-    };
-    
-    void onDisconnect(BLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("Device Disconnected!");
-        // Stop session if active
-        if (sessionActive) {
-            sessionActive = false;
-            Serial.println("Session stopped due to disconnect");
-        }
-    };
-};
-
-// Calibrate Callback
-class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Calibrate Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                calibrateSensor();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Calibration complete via BLE");
-            }
-        }
-    }
-};
-
-// Start Callback
-class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Start Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                startSession();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Session started via BLE");
-            }
-        }
-    }
-};
-
-// Stop Callback
-class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Stop Characteristic event, written: ");
-            Serial.println((int)rxValue[0]);
-
-            if (rxValue[0] == 0x01) {  // Using byte comparison
-                stopSession();
-                // Clear the value after processing
-                pCharacteristic->setValue("0");
-                Serial.println("Session stopped via BLE");
-            }
-        }
-    }
-};
 
 void setup() {
     Serial.begin(115200);
@@ -598,81 +599,91 @@ void setup() {
     mpu.initialize();
     Serial.println("MPU6050 Found!");
     
-    // Create the BLE Server
+    // Create the BLE Device
     BLEDevice::init("Pushup Device");
+    
+    // Create the BLE Server
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new MyServerCallbacks());
     
     // Create the BLE Service
-    BLEService *pService = pServer->createService(SERVICE_UUID);
+    pService = pServer->createService(SERVICE_UUID);
 
-    // Create the BLE Characteristics 
-    pPushupCountCharacteristics = pService->createCharacteristic(
-        PUSHUP_COUNT_CHARACTERISTICS_UUID,
+    // ==== CREATE ALL CHARACTERISTICS PROPERLY ====
+    // Pushup Count Characteristic
+    pPushupCountCharacteristic = pService->createCharacteristic(
+        PUSHUP_COUNT_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
         BLECharacteristic::PROPERTY_NOTIFY
     );
+    pPushupCountCharacteristic->addDescriptor(new BLE2902());
+    pPushupCountCharacteristic->setValue("0");
 
-    pDurationCharacteristics = pService->createCharacteristic(
-        DURATION_CHARACTERISTICS_UUID,
+    // Duration Characteristic
+    pDurationCharacteristic = pService->createCharacteristic(
+        DURATION_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
         BLECharacteristic::PROPERTY_NOTIFY
     );
+    pDurationCharacteristic->addDescriptor(new BLE2902());
+    pDurationCharacteristic->setValue("0.0");
 
-    pCaloriesCharacteristics = pService->createCharacteristic(
-        CALORIES_CHARACTERISTICS_UUID,
+    // Calories Characteristic - THIS WAS MISSING!
+    pCaloriesCharacteristic = pService->createCharacteristic(
+        CALORIES_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
         BLECharacteristic::PROPERTY_NOTIFY
     );
+    pCaloriesCharacteristic->addDescriptor(new BLE2902());
+    pCaloriesCharacteristic->setValue("0.00");
 
-    pWeightCharacteristics = pService->createCharacteristic(
-        WEIGHT_CHARACTERISTICS_UUID,
+    // Weight Characteristic
+    pWeightCharacteristic = pService->createCharacteristic(
+        WEIGHT_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
         BLECharacteristic::PROPERTY_WRITE | 
         BLECharacteristic::PROPERTY_NOTIFY
     );
+    pWeightCharacteristic->addDescriptor(new BLE2902());
+    pWeightCharacteristic->setCallbacks(new WeightCharacteristicCallbacks());
+    pWeightCharacteristic->setValue("70.0");
 
-    pCalibrateCharacteristics = pService->createCharacteristic(
-        CALIBRATE_CHARACTERISTICS_UUID,
+    // Calibrate Characteristic
+    pCalibrateCharacteristic = pService->createCharacteristic(
+        CALIBRATE_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
+    pCalibrateCharacteristic->setCallbacks(new CalibrateCharacteristicCallbacks());
 
-    pStartCharacteristics = pService->createCharacteristic(
-        START_CHARACTERISTICS_UUID,
+    // Start Characteristic
+    pStartCharacteristic = pService->createCharacteristic(
+        START_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
+    pStartCharacteristic->setCallbacks(new StartCharacteristicCallbacks());
 
-    pStopCharacteristics = pService->createCharacteristic(
-        STOP_CHARACTERISTICS_UUID,
+    // Stop Characteristic
+    pStopCharacteristic = pService->createCharacteristic(
+        STOP_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
+    pStopCharacteristic->setCallbacks(new StopCharacteristicCallbacks());
 
-    // Set callbacks
-    pWeightCharacteristics->setCallbacks(new WeightCharacteristicCallbacks());
-    pCalibrateCharacteristics->setCallbacks(new CalibrateCharacteristicCallbacks());
-    pStartCharacteristics->setCallbacks(new StartCharacteristicCallbacks());
-    pStopCharacteristics->setCallbacks(new StopCharacteristicCallbacks());
-
-    // Add descriptors for notifications
-    pPushupCountCharacteristics->addDescriptor(new BLE2902());
-    pDurationCharacteristics->addDescriptor(new BLE2902());
-    pCaloriesCharacteristics->addDescriptor(new BLE2902());
-    pWeightCharacteristics->addDescriptor(new BLE2902());
-
-    // Start service
+    // Start the service
     pService->start();
 
     // Start advertising
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
-    pAdvertising->setMinPreferred(0x06);  // Functions that help with iPhone connections issue
+    pAdvertising->setMinPreferred(0x06);
     pAdvertising->setMaxPreferred(0x12);
     BLEDevice::startAdvertising();
     
-    Serial.println("\nPushup Device Started");
-    Serial.println("Waiting for BLE connection...");
+    Serial.println("\n=== Pushup Device Started ===");
     Serial.println("Device Name: Pushup Device");
+    Serial.println("Service UUID: " SERVICE_UUID);
+    Serial.println("Waiting for BLE connection...");
 }
 
 void loop() {
@@ -680,18 +691,14 @@ void loop() {
         detectPushup();
     }
     
-    // Handle disconnection
     if (!deviceConnected && oldDeviceConnected) {
-        Serial.println("Device disconnected. Restarting advertising...");
         delay(500);
         pServer->startAdvertising();
-        oldDeviceConnected = deviceConnected;
         Serial.println("Advertising restarted");
+        oldDeviceConnected = deviceConnected;
     }
     
-    // Handle connection
     if (deviceConnected && !oldDeviceConnected) {
         oldDeviceConnected = deviceConnected;
-        Serial.println("Device Connected!");
     }
 }
