@@ -3,6 +3,7 @@
 <head>
   <title>Push-up Counter Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { 
       font-family: 'Segoe UI', Arial, sans-serif; 
@@ -153,6 +154,54 @@
     <div class="history-section">
       <h1 style="text-align: left;">Session History</h1>
       <div id="historyList">No sessions yet</div>
+      <canvas id="pushupChart"></canvas>
+
+      <script>
+        const ctx = document.getElementById('pushupChart');
+
+        const pushupChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+              label: 'No. of Pushups',
+              data: [30, 20, 10, 35, 20, 28, 15],
+              backgroundColor: '#9fd3f6',
+              borderRadius: 25,        // rounded bars
+              borderSkipped: false,   // round top & bottom
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                display: false
+              },
+              title: {
+                display: true,
+                text: 'No. of Pushup',
+                font: {
+                  size: 16
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: {
+                  display: false
+                }
+              },
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  stepSize: 10
+                }
+              }
+            }
+          }
+        });
+      </script>
+      
       <button onclick="loadHistory()" style="margin-top:15px;">Refresh History</button>
     </div>
   </div>
