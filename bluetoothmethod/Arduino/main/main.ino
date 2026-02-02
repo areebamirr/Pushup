@@ -371,95 +371,6 @@ bool oldDeviceConnected = false;
 #define START_CHARACTERISTIC_UUID         "19b10006-e8f2-537e-4f6c-d104768a1214"
 #define STOP_CHARACTERISTIC_UUID          "19b10007-e8f2-537e-4f6c-d104768a1214"
 
-// Server Callbacks
-class MyServerCallbacks: public BLEServerCallbacks { 
-    void onConnect(BLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("Device Connected!");
-    };
-    
-    void onDisconnect(BLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("Device Disconnected!");
-        if (sessionActive) {
-            sessionActive = false;
-            Serial.println("Session stopped due to disconnect");
-        }
-    };
-};
-
-// Weight Callback - FIXED: Use Arduino String
-class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        // Get value as Arduino String
-        String rxValue = pCharacteristic->getValue().c_str();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Weight Characteristic event, written: ");
-            Serial.println(rxValue);
-            
-            userWeight = rxValue.toFloat();
-            Serial.print("New weight set: ");
-            Serial.print(userWeight);
-            Serial.println(" kg");
-            
-            // Update characteristic value
-            pCharacteristic->setValue(rxValue.c_str());
-        }
-    }
-};
-
-// Calibrate Callback - FIXED: Use Arduino String
-class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue().c_str();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Calibrate Characteristic event, written: ");
-            
-            // Check first character (should be "1" for calibrate)
-            if (rxValue[0] == '1') {
-                calibrateSensor();
-                Serial.println("Calibration triggered via BLE");
-            }
-        }
-    }
-};
-
-// Start Callback - FIXED: Use Arduino String
-class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue().c_str();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Start Characteristic event, written: ");
-            Serial.println(rxValue);
-            
-            if (rxValue[0] == '1') {
-                startSession();
-                Serial.println("Session started via BLE");
-            }
-        }
-    }
-};
-
-// Stop Callback - FIXED: Use Arduino String
-class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        String rxValue = pCharacteristic->getValue().c_str();
-        
-        if (rxValue.length() > 0) {
-            Serial.print("Stop Characteristic event, written: ");
-            Serial.println(rxValue);
-            
-            if (rxValue[0] == '1') {
-                stopSession();
-                Serial.println("Session stopped via BLE");
-            }
-        }
-    }
-};
-
 // Sensor Functions
 void calibrateSensor() {
     Serial.println("\nCalibrating... move slowly up and down once or twice");
@@ -587,6 +498,95 @@ void detectPushup() {
     }
     delay(50);
 }
+
+// Server Callbacks
+class MyServerCallbacks: public BLEServerCallbacks { 
+    void onConnect(BLEServer* pServer) {
+        deviceConnected = true;
+        Serial.println("Device Connected!");
+    };
+    
+    void onDisconnect(BLEServer* pServer) {
+        deviceConnected = false;
+        Serial.println("Device Disconnected!");
+        if (sessionActive) {
+            sessionActive = false;
+            Serial.println("Session stopped due to disconnect");
+        }
+    };
+};
+
+// Weight Callback - FIXED: Use Arduino String
+class WeightCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        // Get value as Arduino String
+        String rxValue = pCharacteristic->getValue().c_str();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Weight Characteristic event, written: ");
+            Serial.println(rxValue);
+            
+            userWeight = rxValue.toFloat();
+            Serial.print("New weight set: ");
+            Serial.print(userWeight);
+            Serial.println(" kg");
+            
+            // Update characteristic value
+            pCharacteristic->setValue(rxValue.c_str());
+        }
+    }
+};
+
+// Calibrate Callback - FIXED: Use Arduino String
+class CalibrateCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue().c_str();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Calibrate Characteristic event, written: ");
+            
+            // Check first character (should be "1" for calibrate)
+            if (rxValue[0] == '1') {
+                calibrateSensor();
+                Serial.println("Calibration triggered via BLE");
+            }
+        }
+    }
+};
+
+// Start Callback - FIXED: Use Arduino String
+class StartCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue().c_str();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Start Characteristic event, written: ");
+            Serial.println(rxValue);
+            
+            if (rxValue[0] == '1') {
+                startSession();
+                Serial.println("Session started via BLE");
+            }
+        }
+    }
+};
+
+// Stop Callback - FIXED: Use Arduino String
+class StopCharacteristicCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String rxValue = pCharacteristic->getValue().c_str();
+        
+        if (rxValue.length() > 0) {
+            Serial.print("Stop Characteristic event, written: ");
+            Serial.println(rxValue);
+            
+            if (rxValue[0] == '1') {
+                stopSession();
+                Serial.println("Session stopped via BLE");
+            }
+        }
+    }
+};
 
 void setup() {
     Serial.begin(115200);
