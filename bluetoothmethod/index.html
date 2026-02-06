@@ -174,14 +174,15 @@
     // BLE UUIDs (MUST match Arduino code)
     const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
     const UUIDs = {
-      PUSHUP_COUNT: "35608697-bbff-47af-a0b6-87271107ef08",
-      DURATION: "80d21707-22e7-4ce4-8112-980b8cd78391",
-      CALORIES: "97a992f0-1e7f-4d32-b84b-440d4cb6c640",
-      WEIGHT: "b60d9550-ef4f-45bf-961e-6b96f4f60589",
-      CALIBRATE: "5aa68653-fe9d-48e0-a7de-958cb46777e9",
-      START: "588f3afb-25f2-426a-9486-5915fc76e4fa",
-      STOP: "2dedf347-84d3-44af-9bd7-b46969674cd8"
+      PUSHUP_COUNT: "19b10001-e8f2-537e-4f6c-d104768a1214",
+      DURATION:     "19b10002-e8f2-537e-4f6c-d104768a1214",
+      CALORIES:     "19b10003-e8f2-537e-4f6c-d104768a1214",
+      WEIGHT:       "19b10004-e8f2-537e-4f6c-d104768a1214",
+      CALIBRATE:    "19b10005-e8f2-537e-4f6c-d104768a1214",
+      START:        "19b10006-e8f2-537e-4f6c-d104768a1214",
+      STOP:         "19b10007-e8f2-537e-4f6c-d104768a1214"
     };
+
 
     // Global variables
     let bleDevice = null;
@@ -266,7 +267,7 @@
         showFeedback("Searching for Pushup Device...", "info");
         
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "Pushup Device" }],
+          filters: [{ name: "Pushup Device v2" }],
           optionalServices: [SERVICE_UUID]
         });
         
@@ -279,6 +280,11 @@
         service = await bleServer.getPrimaryService(SERVICE_UUID);
 
         await new Promise(r => setTimeout(r, 150)); 
+
+        const chars = await service.getCharacteristics();
+        console.log("Characteristics exposed by ESP32:");
+        chars.forEach(c => console.log(c.uuid));
+
         
         // Get all characteristics
         characteristics.PUSHUP_COUNT = await service.getCharacteristic(UUIDs.PUSHUP_COUNT);
@@ -375,20 +381,26 @@
     }
 
     // Send command to BLE device
-    async function sendCommand(characteristic, value) {
-      if (!bleDevice || !bleDevice.gatt.connected) {
-        showFeedback("Not connected to device", "error");
-        return;
-      }
+    // async function sendCommand(characteristic, value) {
+    //   if (!bleDevice || !bleDevice.gatt.connected) {
+    //     showFeedback("Not connected to device", "error");
+    //     return;
+    //   }
       
-      try {
-        const data = new Uint8Array([value]);
-        await characteristic.writeValue(data);
-        console.log(`Command sent: ${value} to ${characteristic.uuid}`);
-      } catch (error) {
-        console.error("Error sending command:", error);
-        showFeedback("Command failed: " + error.message, "error");
-      }
+    //   try {
+    //     const data = new Uint8Array([value]);
+    //     await characteristic.writeValue(data);
+    //     console.log(`Command sent: ${value} to ${characteristic.uuid}`);
+    //   } catch (error) {
+    //     console.error("Error sending command:", error);
+    //     showFeedback("Command failed: " + error.message, "error");
+    //   }
+    // }
+
+    async function sendCommand(characteristic, value) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(value.toString());
+      await characteristic.writeValue(data);
     }
 
     // Button event handlers
