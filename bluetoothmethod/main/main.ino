@@ -40,14 +40,14 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
 // UUID Settings
-#define SERVICE_UUID                      "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define PUSHUP_COUNT_CHARACTERISTIC_UUID  "19b10001-e8f2-537e-4f6c-d104768a1214"
-#define DURATION_CHARACTERISTIC_UUID      "19b10002-e8f2-537e-4f6c-d104768a1214"
-#define CALORIES_CHARACTERISTIC_UUID      "19b10003-e8f2-537e-4f6c-d104768a1214"
-#define WEIGHT_CHARACTERISTIC_UUID        "19b10004-e8f2-537e-4f6c-d104768a1214"
-#define CALIBRATE_CHARACTERISTIC_UUID     "19b10005-e8f2-537e-4f6c-d104768a1214"
-#define START_CHARACTERISTIC_UUID         "19b10006-e8f2-537e-4f6c-d104768a1214"
-#define STOP_CHARACTERISTIC_UUID          "19b10007-e8f2-537e-4f6c-d104768a1214"
+#define SERVICE_UUID                      "a7eadddc-909c-405b-a6d6-ae6a66446979"
+#define PUSHUP_COUNT_CHARACTERISTIC_UUID  "9cb0dd18-9e30-4bc1-aa93-d5ab3f5851ee"
+#define DURATION_CHARACTERISTIC_UUID      "cf62e221-fa63-478f-a2cb-23a3da3cf4af"
+#define CALORIES_CHARACTERISTIC_UUID      "15de5b9f-1c31-482a-b25d-e2cb3d76cc84"
+#define WEIGHT_CHARACTERISTIC_UUID        "275da945-1b8f-475a-ad26-c439816b728d"
+#define CALIBRATE_CHARACTERISTIC_UUID     "abd4150e-b409-4c46-bce8-7c8bf00efbc2"
+#define START_CHARACTERISTIC_UUID         "a48f6b0c-b7e2-4c85-9649-245858766b0e"
+#define STOP_CHARACTERISTIC_UUID          "a7ec0213-d3ca-41af-887d-90cb6e66b46e"
 
 // Sensor Functions
 void calibrateSensor() {
@@ -284,8 +284,11 @@ void setup() {
     // Create the BLE Service
     pService = pServer->createService(SERVICE_UUID);
 
+    Serial.println("Creating characteristics...");
+    
     // ==== CREATE ALL CHARACTERISTICS PROPERLY ====
     // Pushup Count Characteristic
+    Serial.println("Creating PUSHUP_COUNT characteristic...");
     pPushupCountCharacteristic = pService->createCharacteristic(
         PUSHUP_COUNT_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
@@ -293,8 +296,10 @@ void setup() {
     );
     pPushupCountCharacteristic->addDescriptor(new BLE2902());
     pPushupCountCharacteristic->setValue("0");
+    Serial.println("✓ PUSHUP_COUNT created");
 
     // Duration Characteristic
+    Serial.println("Creating DURATION characteristic...");
     pDurationCharacteristic = pService->createCharacteristic(
         DURATION_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
@@ -302,8 +307,10 @@ void setup() {
     );
     pDurationCharacteristic->addDescriptor(new BLE2902());
     pDurationCharacteristic->setValue("0.0");
+    Serial.println("✓ DURATION created");
 
-    // Calories Characteristic
+    // Calories Characteristic - THIS WAS MISSING
+    Serial.println("Creating CALORIES characteristic...");
     pCaloriesCharacteristic = pService->createCharacteristic(
         CALORIES_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
@@ -311,51 +318,48 @@ void setup() {
     );
     pCaloriesCharacteristic->addDescriptor(new BLE2902());
     pCaloriesCharacteristic->setValue("0.00");
+    Serial.println("✓ CALORIES created");
 
     // Weight Characteristic
+    Serial.println("Creating WEIGHT characteristic...");
     pWeightCharacteristic = pService->createCharacteristic(
         WEIGHT_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_READ | 
-        BLECharacteristic::PROPERTY_WRITE | 
-        BLECharacteristic::PROPERTY_NOTIFY
+        BLECharacteristic::PROPERTY_WRITE
     );
-    pWeightCharacteristic->addDescriptor(new BLE2902());
     pWeightCharacteristic->setCallbacks(new WeightCharacteristicCallbacks());
     pWeightCharacteristic->setValue("70.0");
+    Serial.println("✓ WEIGHT created");
 
     // Calibrate Characteristic
+    Serial.println("Creating CALIBRATE characteristic...");
     pCalibrateCharacteristic = pService->createCharacteristic(
         CALIBRATE_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     pCalibrateCharacteristic->setCallbacks(new CalibrateCharacteristicCallbacks());
+    Serial.println("✓ CALIBRATE created");
 
     // Start Characteristic
+    Serial.println("Creating START characteristic...");
     pStartCharacteristic = pService->createCharacteristic(
         START_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     pStartCharacteristic->setCallbacks(new StartCharacteristicCallbacks());
+    Serial.println("✓ START created");
 
     // Stop Characteristic
+    Serial.println("Creating STOP characteristic...");
     pStopCharacteristic = pService->createCharacteristic(
         STOP_CHARACTERISTIC_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     pStopCharacteristic->setCallbacks(new StopCharacteristicCallbacks());
+    Serial.println("✓ STOP created");
 
     // Start the service
     pService->start();
-
-    Serial.println("Characteristics created:");
-    Serial.println(PUSHUP_COUNT_CHARACTERISTIC_UUID);
-    Serial.println(DURATION_CHARACTERISTIC_UUID);
-    Serial.println(CALORIES_CHARACTERISTIC_UUID);
-    Serial.println(WEIGHT_CHARACTERISTIC_UUID);
-    Serial.println(CALIBRATE_CHARACTERISTIC_UUID);
-    Serial.println(START_CHARACTERISTIC_UUID);
-    Serial.println(STOP_CHARACTERISTIC_UUID);
-
 
     // Start advertising
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
@@ -366,8 +370,10 @@ void setup() {
     BLEDevice::startAdvertising();
     
     Serial.println("\n=== Pushup Device Started ===");
-    Serial.println("Device Name: Pushup Device");
+    Serial.println("Device Name: Pushup Device v2");
     Serial.println("Service UUID: " SERVICE_UUID);
+    Serial.print("Characteristics created: ");
+    Serial.println("PUSHUP_COUNT, DURATION, CALORIES, WEIGHT, CALIBRATE, START, STOP");
     Serial.println("Waiting for BLE connection...");
 }
 

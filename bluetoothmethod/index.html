@@ -172,15 +172,15 @@
 
   <script>
     // BLE UUIDs (MUST match Arduino code)
-    const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+    const SERVICE_UUID = "a7eadddc-909c-405b-a6d6-ae6a66446979";
     const UUIDs = {
-      PUSHUP_COUNT: "19b10001-e8f2-537e-4f6c-d104768a1214",
-      DURATION:     "19b10002-e8f2-537e-4f6c-d104768a1214",
-      CALORIES:     "19b10003-e8f2-537e-4f6c-d104768a1214",
-      WEIGHT:       "19b10004-e8f2-537e-4f6c-d104768a1214",
-      CALIBRATE:    "19b10005-e8f2-537e-4f6c-d104768a1214",
-      START:        "19b10006-e8f2-537e-4f6c-d104768a1214",
-      STOP:         "19b10007-e8f2-537e-4f6c-d104768a1214"
+      PUSHUP_COUNT: "9cb0dd18-9e30-4bc1-aa93-d5ab3f5851ee",
+      DURATION:     "cf62e221-fa63-478f-a2cb-23a3da3cf4af",
+      CALORIES:     "15de5b9f-1c31-482a-b25d-e2cb3d76cc84",
+      WEIGHT:       "275da945-1b8f-475a-ad26-c439816b728d",
+      CALIBRATE:    "abd4150e-b409-4c46-bce8-7c8bf00efbc2",
+      START:        "a48f6b0c-b7e2-4c85-9649-245858766b0e",
+      STOP:         "a7ec0213-d3ca-41af-887d-90cb6e66b46e"
     };
 
 
@@ -190,7 +190,7 @@
     let service = null;
     let characteristics = {};
     let sessionActive = false;
-    let pushupData = {
+    let pushupData = {          
       labels: [],
       counts: []
     };
@@ -258,66 +258,132 @@
       }
       return true;
     }
-
-    // Connect to BLE Device
-    connectBtn.addEventListener('click', async () => {
-      if (!isWebBluetoothEnabled()) return;
-      
-      try {
-        showFeedback("Searching for Pushup Device...", "info");
-        
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "Pushup Device v2" }],
-          optionalServices: [SERVICE_UUID]
-        });
-        
-        bleStatus.textContent = "● Connecting...";
-        bleStatus.className = "connected";
-        
-        bleDevice.addEventListener('gattservicedisconnected', onDisconnected);
-        
-        bleServer = await bleDevice.gatt.connect();
-        service = await bleServer.getPrimaryService(SERVICE_UUID);
-
-        await new Promise(r => setTimeout(r, 150)); 
-
-        const chars = await service.getCharacteristics();
-        console.log("Characteristics exposed by ESP32:");
-        chars.forEach(c => console.log(c.uuid));
-
-        
-        // Get all characteristics
-        characteristics.PUSHUP_COUNT = await service.getCharacteristic(UUIDs.PUSHUP_COUNT);
-        characteristics.DURATION = await service.getCharacteristic(UUIDs.DURATION);
-        characteristics.CALORIES = await service.getCharacteristic(UUIDs.CALORIES);
-        characteristics.WEIGHT = await service.getCharacteristic(UUIDs.WEIGHT);
-        characteristics.CALIBRATE = await service.getCharacteristic(UUIDs.CALIBRATE);
-        characteristics.START = await service.getCharacteristic(UUIDs.START);
-        characteristics.STOP = await service.getCharacteristic(UUIDs.STOP);
-        
-        // Enable notifications
-        await enableNotifications();
-        
-        // Update UI
-        bleStatus.textContent = "● Connected";
-        connectBtn.style.display = 'none';
-        disconnectBtn.style.display = 'inline-block';
-        calibrateBtn.disabled = false;
-        startBtn.disabled = false;
-        setWeightBtn.disabled = false;
-        
-        showFeedback("Connected to Pushup Device!", "success");
-        
-        // Read initial values
-        await readInitialValues();
-        
-      } catch (error) {
-        console.error("Connection failed:", error);
-        showFeedback("Connection failed: " + error.message, "error");
-        bleStatus.textContent = "● Disconnected";
-        bleStatus.className = "disconnected";
-      }
+  
+  // Connect to BLE Device
+connectBtn.addEventListener('click', async () => {
+  if (!isWebBluetoothEnabled()) return;
+  
+  try {
+    showFeedback("Searching for Pushup Device...", "info");
+    
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "Pushup Device v2" }],
+      optionalServices: [SERVICE_UUID]
     });
+    
+    bleStatus.textContent = "● Connecting...";
+    bleStatus.className = "connected";
+    
+    bleDevice.addEventListener('gattservicedisconnected', onDisconnected);
+    
+    bleServer = await bleDevice.gatt.connect();
+    service = await bleServer.getPrimaryService(SERVICE_UUID);
+    
+    // Wait a moment for characteristics to be ready
+    await new Promise(r => setTimeout(r, 200));
+    
+    // Try to get all characteristics, but handle missing ones gracefully
+    try {
+      characteristics.PUSHUP_COUNT = await service.getCharacteristic(UUIDs.PUSHUP_COUNT);
+      characteristics.DURATION = await service.getCharacteristic(UUIDs.DURATION);
+      console.log("Got basic characteristics");
+    } catch (e) {
+      showFeedback("Failed to get basic characteristics", "error");
+      throw e;
+    }
+    
+    // Try to get optional characteristics
+    try {
+      characteristics.CALORIES = await service.getCharacteristic(UUIDs.CALORIES);
+      console.log("Got CALORIES characteristic");
+    } catch (e) {
+      console.warn("CALORIES characteristic not available:", e.message);
+      characteristics.CALORIES = null;
+    }
+    
+    try {
+      characteristics.WEIGHT = await service.getCharacteristic(UUIDs.WEIGHT);
+      console.log("Got WEIGHT characteristic");
+    } catch (e) {
+      console.warn("WEIGHT characteristic not available:", e.message);
+      characteristics.WEIGHT = null;
+      setWeightBtn.disabled = true;
+    }
+    
+    try {
+      characteristics.CALIBRATE = await service.getCharacteristic(UUIDs.CALIBRATE);
+      console.log("Got CALIBRATE characteristic");
+    } catch (e) {
+      console.warn("CALIBRATE characteristic not available:", e.message);
+      characteristics.CALIBRATE = null;
+      calibrateBtn.disabled = true;
+    }
+    
+    try {
+      characteristics.START = await service.getCharacteristic(UUIDs.START);
+      console.log("Got START characteristic");
+    } catch (e) {
+      console.warn("START characteristic not available:", e.message);
+      characteristics.START = null;
+      startBtn.disabled = true;
+    }
+    
+    try {
+      characteristics.STOP = await service.getCharacteristic(UUIDs.STOP);
+      console.log("Got STOP characteristic");
+    } catch (e) {
+      console.warn("STOP characteristic not available:", e.message);
+      characteristics.STOP = null;
+    }
+    
+    // Enable notifications for available characteristics
+    if (characteristics.PUSHUP_COUNT) {
+      await characteristics.PUSHUP_COUNT.startNotifications();
+      characteristics.PUSHUP_COUNT.addEventListener('characteristicvaluechanged', 
+        handlePushupCountChange);
+    }
+    
+    if (characteristics.DURATION) {
+      await characteristics.DURATION.startNotifications();
+      characteristics.DURATION.addEventListener('characteristicvaluechanged', 
+        handleDurationChange);
+    }
+    
+    if (characteristics.CALORIES) {
+      await characteristics.CALORIES.startNotifications();
+      characteristics.CALORIES.addEventListener('characteristicvaluechanged', 
+        handleCaloriesChange);
+    }
+    
+    // Update UI
+    bleStatus.textContent = "● Connected";
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = 'inline-block';
+    
+    showFeedback("Connected to Pushup Device!", "success");
+    
+    // Read initial values
+    await readInitialValues();
+    
+  } catch (error) {
+    console.error("Connection failed:", error);
+    
+    // List available characteristics for debugging
+    if (service) {
+      try {
+        const chars = await service.getCharacteristics();
+        console.log("All available characteristics:");
+        chars.forEach(c => console.log(`UUID: ${c.uuid}`));
+      } catch (e) {
+        console.error("Couldn't list characteristics:", e);
+      }
+    }
+    
+    showFeedback("Connection failed: " + error.message, "error");
+    bleStatus.textContent = "● Disconnected";
+    bleStatus.className = "disconnected";
+  }
+});
 
     // Disconnect from BLE
     disconnectBtn.addEventListener('click', async () => {
